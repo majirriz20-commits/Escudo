@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visor de Escudo 3D Interactivo</title>
+    <!-- Importar Tailwind CSS para estilos rápidos y responsivos -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Importar la librería model-viewer -->
+    <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.3.0/model-viewer.min.js"></script>
+    <style>
+        /* Estilos base para asegurar que el modelo ocupe toda la pantalla */
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; background-color: #1a1a2e; }
+        
+        /* Personalizar la barra de progreso de model-viewer */
+        model-viewer::part(default-progress-bar) {
+            background-color: #e82943;
+        }
+    </style>
+</head>
+<body class="relative text-white font-sans">
+
+    <!-- 
+      Componente model-viewer 
+      Cargando un modelo desde una URL absoluta para evitar el error de ruta
+    -->
+    <model-viewer 
+        id="mi-escudo"
+        class="w-full h-full"
+        src="./assets/Escudo.glb"
+        alt="Un modelo 3D de un escudo"
+        camera-controls
+        auto-rotate
+        shadow-intensity="1"
+        exposure="1.2"
+        ar>
+    </model-viewer>
+
+    <!-- Panel de controles superpuesto -->
+    <div class="absolute bottom-8 left-0 right-0 flex justify-center w-full px-4 pointer-events-none">
+        <div class="bg-gray-900/80 backdrop-blur-md p-4 sm:p-6 rounded-2xl shadow-2xl border border-gray-700 flex flex-col sm:flex-row gap-4 pointer-events-auto max-w-4xl">
+            
+            <div class="text-center sm:text-left mb-2 sm:mb-0 sm:mr-4 flex flex-col justify-center">
+                <h2 class="text-xl font-bold text-gray-100">Controles del Escudo</h2>
+                <p class="text-sm text-gray-400">Modifica los materiales en tiempo real</p>
+            </div>
+
+            <div class="flex flex-wrap justify-center gap-3">
+                <!-- Botón 1: Cambiar Color Base -->
+                <button id="btn-color" class="bg-blue-600 hover:bg-blue-500 transition-colors text-white font-semibold py-2 px-4 rounded-lg shadow flex items-center justify-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path></svg>
+                    Acero Oscuro
+                </button>
+
+                <!-- Botón 2: Cambiar Textura (Desgaste) -->
+                <button id="btn-textura" class="bg-emerald-600 hover:bg-emerald-500 transition-colors text-white font-semibold py-2 px-4 rounded-lg shadow flex items-center justify-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    Aplicar Desgaste
+                </button>
+
+                <!-- Botón 3: Modificar Metalizado / Normal Map -->
+                <button id="btn-metal" class="bg-purple-600 hover:bg-purple-500 transition-colors text-white font-semibold py-2 px-4 rounded-lg shadow flex items-center justify-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                    Pulir / Quitar Relieve
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script para interactuar con la API de materiales -->
+    <script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const modelViewer = document.querySelector('model-viewer#mi-escudo');
+        const btnColor = document.getElementById('btn-color');
+        const btnTextura = document.getElementById('btn-textura');
+        const btnMetal = document.getElementById('btn-metal');
+
+        let isDarkSteel = false;
+        let isWorn = false;
+        let isPolished = false;
+
+        modelViewer.addEventListener('load', () => {
+            console.log("¡El modelo cargó correctamente!");
+            console.log("Materiales de este modelo:", modelViewer.model.materials);
+            
+            // Si el material principal no cambia, prueba cambiando el [0] por [1] o [2]
+            const material = modelViewer.model.materials[0];
+            
+            if (!material.pbrMetallicRoughness.baseColorTexture) {
+                console.warn("ADVERTENCIA: El material [0] no tiene una textura base exportada desde Blender. El botón de texturas podría no funcionar.");
+            }
+
+            // 1. Cambiar Color Base
+            btnColor.addEventListener('click', () => {
+                isDarkSteel = !isDarkSteel;
+                if (isDarkSteel) {
+                    material.pbrMetallicRoughness.setBaseColorFactor([0.2, 0.2, 0.3, 1]);
+                    btnColor.innerHTML = `<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg> Restaurar Color`;
+                    btnColor.classList.replace('bg-blue-600', 'bg-blue-800');
+                } else {
+                    material.pbrMetallicRoughness.setBaseColorFactor([1, 1, 1, 1]);
+                    btnColor.innerHTML = `<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path></svg> Acero Oscuro`;
+                    btnColor.classList.replace('bg-blue-800', 'bg-blue-600');
+                }
+            });
+
+            // 2. Aplicar Nueva Textura (Simulación de desgaste)
+            btnTextura.addEventListener('click', async () => {
+                isWorn = !isWorn;
+                try {
+                    if (isWorn) {
+                        // IMPORTANTE: Asegúrate de renombrar tus archivos para quitarles los espacios
+                        const texturaDesgasteURL = './assets/escudo_color.png'; 
+                        const nuevaTextura = await modelViewer.createTexture(texturaDesgasteURL);
+                        
+                        if(material.pbrMetallicRoughness.baseColorTexture) {
+                            material.pbrMetallicRoughness.baseColorTexture.setTexture(nuevaTextura);
+                        }
+                        
+                        btnTextura.innerHTML = `<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg> Quitar Desgaste`;
+                        btnTextura.classList.replace('bg-emerald-600', 'bg-emerald-800');
+                    } else {
+                        const texturaLimpiaURL = './assets/escudo_blanco_negro.png'; 
+                        const texturaOriginal = await modelViewer.createTexture(texturaLimpiaURL);
+                        
+                        if(material.pbrMetallicRoughness.baseColorTexture) {
+                            material.pbrMetallicRoughness.baseColorTexture.setTexture(texturaOriginal);
+                        }
+
+                        btnTextura.innerHTML = `<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg> Aplicar Desgaste`;
+                        btnTextura.classList.replace('bg-emerald-800', 'bg-emerald-600');
+                    }
+                } catch (error) {
+                    console.error("Error al cargar la textura:", error);
+                    alert("No se pudo cargar la textura. Verifica que estés usando Live Server y la ruta sea correcta.");
+                }
+            });
+
+            // 3. Modificar Factor Metálico y Rugosidad
+            btnMetal.addEventListener('click', () => {
+                isPolished = !isPolished;
+                if (isPolished) {
+                    material.pbrMetallicRoughness.setMetallicFactor(1.0);
+                    material.pbrMetallicRoughness.setRoughnessFactor(0.0);
+                    btnMetal.innerHTML = `<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg> Quitar Pulido`;
+                    btnMetal.classList.replace('bg-purple-600', 'bg-purple-800');
+                } else {
+                    material.pbrMetallicRoughness.setMetallicFactor(0.5);
+                    material.pbrMetallicRoughness.setRoughnessFactor(0.8);
+                    btnMetal.innerHTML = `<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg> Pulir / Quitar Relieve`;
+                    btnMetal.classList.replace('bg-purple-800', 'bg-purple-600');
+                }
+            });
+        });
+    });
+</script>
+</body>
+</html>
